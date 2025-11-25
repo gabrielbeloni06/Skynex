@@ -1,12 +1,12 @@
 import React, { useState, useEffect, Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { useGLTF, useTexture, OrbitControls, Stage, Html, Center } from '@react-three/drei'  
+import { useGLTF, useTexture, OrbitControls, Stage, Html, Center, Environment, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 const WEAPON_CONFIG = {
   "AK-47": { 
     model: "/ak47.glb", 
     textures: ["/skin_redline.jpg", "/skin_blue.jpg"], 
-    scale: 0.1,
+    scale: 0.1, 
     rotation: [0, Math.PI / 2, 0]
   },
   "AWP": { 
@@ -26,8 +26,10 @@ const WEAPON_CONFIG = {
 function WeaponModel({ weaponName, textureIndex }) {
   const config = WEAPON_CONFIG[weaponName] || WEAPON_CONFIG["AK-47"]
   const { scene } = useGLTF(config.model)
+  
   const texturePath = config.textures[textureIndex % config.textures.length]
   const texture = useTexture(texturePath)
+  
   texture.flipY = false
   texture.colorSpace = THREE.SRGBColorSpace
 
@@ -35,27 +37,26 @@ function WeaponModel({ weaponName, textureIndex }) {
     scene.traverse((child) => {
       if (child.isMesh) {
         child.material.map = texture
-        child.material.roughness = 0.5
-        child.material.metalness = 0.6
+        child.material.roughness = 0.3
+        child.material.metalness = 0.8
         child.material.needsUpdate = true
       }
     })
   }, [scene, texture, weaponName])
+
   return (
-    <Center>
+    <Center top>
       <primitive object={scene} scale={config.scale} rotation={config.rotation} />
     </Center>
   )
 }
+
 function ErrorBox({ message }) {
   return (
     <Html center>
       <div style={{ color: '#ff4444', background: 'rgba(0,0,0,0.9)', padding: '20px', border: '1px solid red', borderRadius: '10px', textAlign: 'center', width: '200px' }}>
         <strong>⚠️ ERRO 3D</strong><br/>
-        <span style={{fontSize: '0.8rem'}}>{message}</span><br/><br/>
-        <span style={{fontSize: '0.7rem', color: '#aaa'}}>
-          Verifique se o arquivo <strong>.glb</strong> está na pasta <strong>public</strong>.
-        </span>
+        <span style={{fontSize: '0.8rem'}}>{message}</span>
       </div>
     </Html>
   )
@@ -82,6 +83,7 @@ export default function CS2Viewer() {
     }
     fetchData()
   }, [])
+
   useEffect(() => {
     if (allSkinsData.length === 0) return
 
@@ -107,15 +109,14 @@ export default function CS2Viewer() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#1a1a1a', display: 'flex', fontFamily: 'Arial, sans-serif', overflow: 'hidden' }}>
-    
-      <div style={{ width: '80px', background: '#111', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', borderRight: '1px solid #333', zIndex: 20 }}>
+      <div style={{ width: '80px', background: '#050505', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', borderRight: '1px solid #333', zIndex: 20 }}>
         {Object.keys(WEAPON_CONFIG).map(weapon => (
           <div 
             key={weapon}
             onClick={() => setSelectedWeapon(weapon)}
             style={{
               width: '50px', height: '50px', marginBottom: '20px', borderRadius: '10px',
-              background: selectedWeapon === weapon ? '#4caf50' : '#333',
+              background: selectedWeapon === weapon ? '#4caf50' : '#222',
               color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center',
               cursor: 'pointer', fontWeight: 'bold', fontSize: '0.7rem', textAlign: 'center',
               transition: '0.2s', border: selectedWeapon === weapon ? '2px solid white' : '1px solid #444'
@@ -129,22 +130,37 @@ export default function CS2Viewer() {
       <div style={{ flex: 1, position: 'relative', display: 'flex' }}>
         <div style={{ flex: 1, position: 'relative' }}>
           
-          <Canvas dpr={[1, 2]} camera={{ fov: 50, position: [0, 0, 5] }} shadows>
-            <color attach="background" args={['#151515']} />
+          <Canvas dpr={[1, 2]} camera={{ fov: 50, position: [0, 0, 4.5] }} shadows>
             
-            <OrbitControls 
-              autoRotate 
-              autoRotateSpeed={0.5} 
-              enableZoom={true} 
-              minDistance={2} 
-              maxDistance={8} 
-            />
+            <color attach="background" args={['#1c1c1c']} />
+            <fog attach="fog" args={['#1c1c1c', 0, 15]} /> 
+
+            <OrbitControls autoRotate autoRotateSpeed={0.5} enableZoom={true} minDistance={2} maxDistance={8} />
             
-            <Stage environment="city" intensity={0.7} adjustCamera={false}>
-              <Suspense fallback={<Html center><div style={{color:'white'}}>Carregando Modelo...</div></Html>}>
+            <Environment files="/studio.hdr" background={false} />
+            <pointLight position={[0, 0, 0]} intensity={1} color="#ffffff" />
+            <ambientLight intensity={0.5} /> 
+
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow>
+              <planeGeometry args={[20, 20]} />
+              <meshStandardMaterial color="#2c2c2c" roughness={0.8} metalness={0.1} />
+            </mesh>
+
+            <Stage environment={null} intensity={1} adjustCamera={false}>
+              <Suspense fallback={<ErrorBox message="A carregar 3D..." />}>
                 <WeaponModel weaponName={selectedWeapon} textureIndex={selectedIndex} />
               </Suspense>
             </Stage>
+
+            <ContactShadows 
+              position={[0, -0.5, 0]} 
+              opacity={0.8} 
+              scale={10} 
+              blur={2} 
+              far={4} 
+              resolution={256}
+              color="#000000"
+            />
           </Canvas>
 
           <div style={{ position: 'absolute', top: 20, left: 20, color: 'white', pointerEvents: 'none' }}>
@@ -153,7 +169,8 @@ export default function CS2Viewer() {
             </h1>
           </div>
         </div>
-        <div style={{ width: '350px', background: 'rgba(0,0,0,0.9)', borderLeft: '1px solid #333', display: 'flex', flexDirection: 'column', zIndex: 10 }}>
+
+        <div style={{ width: '350px', background: 'rgba(0,0,0,0.8)', borderLeft: '1px solid #333', display: 'flex', flexDirection: 'column', backdropFilter: 'blur(10px)', zIndex: 10 }}>
           <div style={{ padding: '20px', borderBottom: '1px solid #333' }}>
             <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem' }}>MARKETPLACE</h2>
             <p style={{ color: '#666', margin: '5px 0 0 0', fontSize: '0.8rem' }}>{displaySkins.length} SKINS DISPONÍVEIS</p>
@@ -185,11 +202,14 @@ export default function CS2Viewer() {
           </div>
 
           {selectedSkin && (
-            <div style={{ padding: '20px', background: '#222', borderTop: '1px solid #333' }}>
+            <div style={{ padding: '20px', background: 'rgba(0,0,0,0.5)', borderTop: '1px solid #333' }}>
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <span style={{color:'#aaa', fontSize:'0.8rem'}}>Float: {selectedSkin.float}</span>
-                <button style={{ padding: '10px 20px', background: '#4caf50', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>
-                  COMPRAR
+                <div style={{display:'flex', flexDirection:'column'}}>
+                   <span style={{color:'#aaa', fontSize:'0.7rem'}}>FLOAT</span>
+                   <span style={{color:'white', fontSize:'0.9rem'}}>{selectedSkin.float}</span>
+                </div>
+                <button style={{ padding: '10px 25px', background: '#4caf50', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', textTransform:'uppercase' }}>
+                  Comprar
                 </button>
               </div>
             </div>
