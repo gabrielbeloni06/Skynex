@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react'
+import React, { useState, useEffect, Suspense, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { useGLTF, useTexture, OrbitControls, Stage, Html, Center, Environment, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
@@ -23,10 +23,10 @@ const WEAPON_CONFIG = {
   }
 }
 
-function WeaponModel({ weaponName, textureIndex }) {
+function WeaponModel({ weaponName, textureIndex, floatValue }) { 
   const config = WEAPON_CONFIG[weaponName] || WEAPON_CONFIG["AK-47"]
-  const { scene } = useGLTF(config.model)
   
+  const { scene } = useGLTF(config.model)
   const texturePath = config.textures[textureIndex % config.textures.length]
   const texture = useTexture(texturePath)
   
@@ -36,13 +36,18 @@ function WeaponModel({ weaponName, textureIndex }) {
   useEffect(() => {
     scene.traverse((child) => {
       if (child.isMesh) {
+        if (!child.material.isCloned) {
+             child.material = child.material.clone();
+             child.material.isCloned = true;
+        }
         child.material.map = texture
-        child.material.roughness = 0.3
         child.material.metalness = 0.8
+        child.material.color.setScalar(1 - floatValue * 0.4); 
+        child.material.roughness = 0.3 + floatValue * 0.7; 
         child.material.needsUpdate = true
       }
     })
-  }, [scene, texture, weaponName])
+  }, [scene, texture, weaponName, floatValue])
 
   return (
     <Center top>
@@ -69,6 +74,7 @@ export default function CS2Viewer() {
   const [selectedSkin, setSelectedSkin] = useState(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [floatValue, setFloatValue] = useState(0.01)
   useEffect(() => {
     async function fetchData() {
       try {
@@ -102,6 +108,7 @@ export default function CS2Viewer() {
     if (skinsWithPrice.length > 0) {
       setSelectedSkin(skinsWithPrice[0])
       setSelectedIndex(0)
+      setFloatValue(parseFloat(skinsWithPrice[0].float)); 
     }
   }, [selectedWeapon, allSkinsData])
 
@@ -109,6 +116,7 @@ export default function CS2Viewer() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#1a1a1a', display: 'flex', fontFamily: 'Arial, sans-serif', overflow: 'hidden' }}>
+      
       <div style={{ width: '80px', background: '#050505', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', borderRight: '1px solid #333', zIndex: 20 }}>
         {Object.keys(WEAPON_CONFIG).map(weapon => (
           <div 
@@ -130,28 +138,34 @@ export default function CS2Viewer() {
       <div style={{ flex: 1, position: 'relative', display: 'flex' }}>
         <div style={{ flex: 1, position: 'relative' }}>
           
-          <Canvas dpr={[1, 2]} camera={{ fov: 50, position: [0, 0, 4.5] }} shadows>
+          <Canvas dpr={[1, 2]} camera={{ fov: 50, position: [0, 0.6, 3.5] }} shadows>
             
             <color attach="background" args={['#1c1c1c']} />
             <fog attach="fog" args={['#1c1c1c', 0, 15]} /> 
-
-            <OrbitControls autoRotate autoRotateSpeed={0.5} enableZoom={true} minDistance={2} maxDistance={8} />
+            <OrbitControls 
+              autoRotate 
+              autoRotateSpeed={0.5} 
+              enableZoom={true} 
+              minDistance={3} 
+              maxDistance={8}
+              minPolarAngle={Math.PI / 2 - 0.1} 
+              maxPolarAngle={Math.PI / 2 + 0.1}
+            />
             
             <Environment files="/studio.hdr" background={false} />
             <pointLight position={[0, 0, 0]} intensity={1} color="#ffffff" />
+            <directionalLight position={[5, 5, 5]} intensity={1.5} color="#ffffff" castShadow />
+            <directionalLight position={[-5, 0, 0]} intensity={0.5} color="#aaaaaa" />
             <ambientLight intensity={0.5} /> 
-
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.6, 0]} receiveShadow>
               <planeGeometry args={[20, 20]} />
               <meshStandardMaterial color="#2c2c2c" roughness={0.8} metalness={0.1} />
             </mesh>
-
             <Stage environment={null} intensity={1} adjustCamera={false}>
               <Suspense fallback={<ErrorBox message="A carregar 3D..." />}>
-                <WeaponModel weaponName={selectedWeapon} textureIndex={selectedIndex} />
+                <WeaponModel weaponName={selectedWeapon} textureIndex={selectedIndex} floatValue={floatValue} />
               </Suspense>
             </Stage>
-
             <ContactShadows 
               position={[0, -0.5, 0]} 
               opacity={0.8} 
@@ -162,14 +176,12 @@ export default function CS2Viewer() {
               color="#000000"
             />
           </Canvas>
-
           <div style={{ position: 'absolute', top: 20, left: 20, color: 'white', pointerEvents: 'none' }}>
             <h1 style={{ fontSize: '5rem', margin: 0, opacity: 0.05, textTransform: 'uppercase', fontFamily: 'Impact' }}>
               {selectedWeapon}
             </h1>
           </div>
         </div>
-
         <div style={{ width: '350px', background: 'rgba(0,0,0,0.8)', borderLeft: '1px solid #333', display: 'flex', flexDirection: 'column', backdropFilter: 'blur(10px)', zIndex: 10 }}>
           <div style={{ padding: '20px', borderBottom: '1px solid #333' }}>
             <h2 style={{ margin: 0, color: 'white', fontSize: '1.5rem' }}>MARKETPLACE</h2>
@@ -180,7 +192,7 @@ export default function CS2Viewer() {
             {displaySkins.map((skin, index) => (
               <div 
                 key={skin.id}
-                onClick={() => { setSelectedSkin(skin); setSelectedIndex(index); }}
+                onClick={() => { setSelectedSkin(skin); setSelectedIndex(index); setFloatValue(parseFloat(skin.float)) }} 
                 style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '10px', marginBottom: '10px', borderRadius: '8px',
@@ -192,7 +204,7 @@ export default function CS2Viewer() {
                 <img src={skin.image} style={{ width: '60px', height: '40px', objectFit: 'contain' }} alt="" />
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, color: 'white', fontSize: '0.8rem', fontWeight: 'bold' }}>{skin.name.split('|')[1]}</p>
-                  <p style={{ margin: 0, color: skin.rarity.color, fontSize: '0.7rem' }}>{skin.rarity.name}</p>
+                  <p style={{ color: skin.rarity.color, fontSize: '0.7rem' }}>{skin.rarity.name}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: 0, color: '#4caf50', fontWeight: 'bold', fontSize: '0.8rem' }}>{skin.price}</p>
@@ -203,10 +215,27 @@ export default function CS2Viewer() {
 
           {selectedSkin && (
             <div style={{ padding: '20px', background: 'rgba(0,0,0,0.5)', borderTop: '1px solid #333' }}>
+              <div style={{marginBottom: '15px'}}>
+                <span style={{color:'white', fontSize:'0.9rem', marginBottom:'5px', display:'block'}}>Float ({floatValue.toFixed(4)})</span>
+                <input 
+                  type="range" 
+                  min="0.0001" 
+                  max="1.0" 
+                  step="0.0001" 
+                  value={floatValue}
+                  onChange={(e) => setFloatValue(parseFloat(e.target.value))}
+                  style={{ width: '100%', height: '5px', background: '#444' }}
+                />
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.7rem', color:'#aaa', marginTop:'5px'}}>
+                  <span>Factory New</span>
+                  <span>Battle-Scarred</span>
+                </div>
+              </div>
+
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <div style={{display:'flex', flexDirection:'column'}}>
-                   <span style={{color:'#aaa', fontSize:'0.7rem'}}>FLOAT</span>
-                   <span style={{color:'white', fontSize:'0.9rem'}}>{selectedSkin.float}</span>
+                   <span style={{color:'#aaa', fontSize:'0.7rem'}}>PREÇO BASE</span>
+                   <span style={{color:'white', fontSize:'0.9rem'}}>{selectedSkin.price}</span>
                 </div>
                 <button style={{ padding: '10px 25px', background: '#4caf50', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', textTransform:'uppercase' }}>
                   Comprar
